@@ -1,0 +1,72 @@
+---
+title: "Introduction"
+output:
+  html_document:
+    df_print: paged
+---
+
+This process will take you through installing the ipeds library and making sure you can access a survey using it. Hopefully there'll be enough detail to make the scripts work under any OS. This script assumes Windows, but has the Linux and Mac stuff included but commented out. 
+
+First, make sure you have devtools installed, and pull down the latest version of the ipeds package from [Bryer's Github](https://github.com/jbryer/ipeds/tree/master/R). I'm also going to pull in the tidyverse set of packages, just for the nice way it displays datasets ('tibbles'). Tidyverse is optional for this introduction, but I use it in the other analyses. 
+
+```{r}
+#install.packages('devtools') # Uncomment this if you don't already have devtools installed.
+library(devtools)
+install_github('https://github.com/jbryer/ipeds')
+library(ipeds)
+suppressMessages(library(tidyverse))
+```
+
+
+# The Basics
+
+First, if you're on a Mac, install mdbtools by doing this in a Terminal window:
+
+ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" < /dev/null 2> /dev/null \n')
+brew install mdbtools
+
+If you're on Linux, do (something like) this:
+
+sudo apt-get install mdbtools
+
+If you're on Windows, you'll need the data files from my Github. Save them wherever you want, and set the "dir" variable defined in the below code chunk to point to the location where you saved them. The location I've defined happens to be the place where the ipeds package wants to put the files anyway, so it's maybe a good choice.
+
+```{r}
+# Uncomment this line for Mac/Linux:
+#download_ipeds(2018)
+
+# This is how to tell ipeds where you've stored your data files. Note that you need the double-slash. 
+dir <- "C:\\Users\\mjs26\\Documents\\R\\R-3.6.1\\library\\ipeds\\data\\downloaded"
+
+# On Linux or Mac, use this line instead:
+dir <-  paste0(find.package(package = 'ipeds'),'/data/downloaded')
+
+```
+
+# Accessing the surveys
+
+Now you should be ready to interact with the data files you've downloaded. First, let's see what's available, and what we already have:
+
+```{r}
+available_ipeds(dir=dir)
+```
+
+This is a handy dataset that tells you exactly how to refer to each of the collections and a brief description of each one:
+
+```{r}
+data(surveys)
+surveys
+```
+
+# Opening a survey
+
+And finally, here's how you actually pull in one of the surveys. We'll get the Institutional Characteristics header from the 2018 collection. 
+
+```{r}
+
+hd <- ipeds_survey('HD', year=2018, dir=dir)
+names(hd) <- tolower(names(hd))
+glimpse(hd)
+```
+
+
