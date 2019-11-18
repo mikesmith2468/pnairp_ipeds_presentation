@@ -1,0 +1,171 @@
+---
+title: 'Easy Way #2'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+This example uses the ipeds library to carry out a simple regression analysis involving data from about half a dozen different IPEDS surveys from the same year. It is intended to investigate the impact of a quarter calendar system on graduation rates. It is a rather silly analysis, however, and should be regarded as  demonstration of what *can* be done with the package, not perhaps what *should* be done with the package. 
+
+We’ll use these IVs in our analysis:
+
+* Size of graduation cohort
+* Selectivity of the institution
+* Tuition $
+* Control (public/private)
+* Locale (city/town/suburb/rural)
+* Student:faculty ratio
+* Calendar system (semester/quarter)
+
+
+```{r}
+library(ipeds)
+library(tidyverse)
+library(gvlma)
+library(car)
+library(reshape2)
+
+dir <- "C:\\Users\\mjs26\\Documents\\data\\downloaded"
+min_school_size <- 100
+```
+
+# What's available?
+
+Helpful for a quick reminder of the various IPEDS surveys and their abbreviations. 
+
+```{r}
+
+data(surveys)
+surveys %>% select(c('SurveyID','Survey','Title'))
+
+```
+
+# Get the data
+
+We're going to grab the survey files one at a time, merging (joining) them together by unit id as we go. The three IC files are first up:
+
+```{r}
+directory <- ipeds_survey(table='HD',year=2017, dir=dir)
+names(directory) <- tolower(names(directory))
+
+charges <- ipeds_survey('IC_AY', year=2017, dir=dir)
+names(charges) <- tolower(names(charges))
+
+charges = charges[,c('unitid',
+ 'tuition1', 'fee1', 'hrchg1',  #In-district average tuition for full-time undergraduates
+ 'tuition2', 'fee2', 'hrchg2',  #In-state average tuition for full-time undergraduates
+ 'tuition3', 'fee3', 'hrchg3',  #Out-of-state average tuition for full-time undergraduates
+ 'tuition5', 'fee5', 'hrchg5', #In-district average tuition full-time graduates
+ 'tuition6', 'fee6', 'hrchg6', #In-state average tuition full-time graduates
+ 'tuition7', 'fee7', 'hrchg7')] #Out-of-state average tuition full-time graduates
+
+dirCharges = merge(charges, directory, by='unitid', all.x=TRUE)
+
+ic <- ipeds_survey(table='IC',year=2017, dir=dir)
+names(ic) <- tolower(names(ic))
+
+dirCharges <- merge(dirCharges, ic, by='unitid', all.x=TRUE)
+
+
+```
+
+Then Admissions:
+
+```{r}
+
+admissions <- ipeds_survey(table='ADM',year=2017, dir=dir)
+names(admissions) <- tolower(names(admissions))
+
+```
+
+Graduation rates:
+
+```{r}
+
+gradrates <- (ipeds_survey('GR',year=2017, dir=dir))
+names(gradrates) <- tolower(names(gradrates))
+gradrates <- gradrates[which(gradrates$grtype %in% c(2,3)),]
+
+# extract the 150% graduation rate
+theRates <- dcast(gradrates, unitid ~ grtype, value.var = 'grtotlt')
+names(theRates) <- c('unitid','adjusted_cohort','completers')
+theRates$rate <- theRates$completers/theRates$adjusted_cohort
+```
+
+Eliminate any schools with missing graduation rates:
+
+```{r}
+
+theRates <- theRates[which(!is.na(theRates$rate)),]
+
+```
+
+
+
+And any with less than `r min_school_size` in the grad rate cohort
+
+
+```{r}
+
+d1 <- merge(dirCharges, theRates, by='unitid', all.y=TRUE)
+d1 <- d1[which(d1$calsys %in% c(1,2)),]
+d1$calsys <- as.factor(d1$calsys)
+levels(d1$calsys) <- c('Semester','Quarter')
+d1 <- d1[which(d1$adjusted_cohort > min_school_size),]
+
+```
+
+IPEDS Admissions gives us selectivity.
+
+```{r}
+d1 <- merge(d1, admissions, by='unitid', all.x=TRUE)
+d1$select <- d1$admssn / d1$applcn
+```
+
+Here's Fall Enrollment, which is where student:faculty ratio lives.
+
+```{r}
+
+fallenr <- ipeds_survey(table='EFD', year=2017, dir=dir)
+names(fallenr) <- tolower(names(fallenr))
+d1 <- merge(d1, fallenr, by='unitid', all.x=TRUE)
+d1 <- d1[which(!is.na(d1$stufacr)),] # remove any schools with missing s:f ratio
+```
+
+
+That's all the data we need. Do our continuous variables have sensible shapes?
+
+```{r}
+
+plot(density(d1$adjusted_cohort), main="Cohort")
+plot(density(d1[which(!is.na(d1$select)),]$select), main="Admit %")
+plot(density(d1$stufacr), main="Student:faculty ratio")
+
+table(d1$calsys,d1$control)
+
+```
+
+This code chunk recodes IPEDS' locale codes into something more readable.
+
+```{r}
+d1$locale2 <- substr(d1$locale,1,1)
+d1$locale2 <- as.factor(d1$locale2)
+levels(d1$locale2) <- c('City','Town','Suburb','Rural')
+table(d1$locale2, d1$locale)
+```
+
+
+# Model and output
+
+```{r}
+theLM <- lm(rate ~ calsys + as.integer(tuition1) + control + select + stufacr + locale2  + adjusted_cohort, data=d1, family=gaussian)
+summary(theLM)
+library(gvlma)
+gvlma(theLM)
+plot(theLM)
+vif(theLM)
+```
+
