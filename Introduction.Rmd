@@ -1,6 +1,7 @@
 ---
 title: "Introduction"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -22,8 +23,7 @@ suppressMessages(library(tidyverse))
 
 First, if you're on a Mac, install mdbtools by doing this in a Terminal window:
 
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" < /dev/null 2> /dev/null \n')
-brew install mdbtools
+(See the .Rmd for this, I can't make it render properly in PDF. ;)
 
 If you're on Linux, do (something like) this:
 
